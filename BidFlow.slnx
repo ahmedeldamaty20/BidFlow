@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/BidFlow.Api/BidFlow.Api.csproj" />
+    <Project Path="src/BidFlow.Domain/BidFlow.Domain.csproj" />
+    <Project Path="src/BidFlow.Infrastructure/BidFlow.Infrastructure.csproj" />
+  </Folder>
+</Solution>

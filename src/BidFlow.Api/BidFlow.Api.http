@@ -1,0 +1,6 @@
+@BidFlow.Api_HostAddress = http://localhost:5245
+
+GET {{BidFlow.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
