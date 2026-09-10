@@ -1,10 +1,11 @@
-﻿using BidFlow.Domain.Entities;
+﻿using BidFlow.Api.DTOs;
+using BidFlow.Domain.Entities;
 using BidFlow.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
 namespace BidFlow.Api.Services;
 
-public class AuctionService(BidFlowDbContext db) : IAuctionService
+public class AuctionService(BidFlowDbContext db, IAuctionNotifier notifier) : IAuctionService
 {
     public async Task<Auction> CreateAuctionAsync(string title, string description, decimal startingPrice, string sellerName)
     {
@@ -50,6 +51,9 @@ public class AuctionService(BidFlowDbContext db) : IAuctionService
 
         db.Bids.Add(bid);
         await db.SaveChangesAsync();
+
+        var notification = new BidPlacedNotification(bid.Id, bid.AuctionId, bid.BidderName, bid.Amount, bid.PlacedAt);
+        await notifier.NotifyBidPlacedAsync(auctionId, notification);
 
         return (true, null, bid);
     }
