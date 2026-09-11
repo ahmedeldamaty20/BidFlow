@@ -16,9 +16,6 @@ public class BidsController(IAuctionService auctionService) : BaseController
 
         var response = new BidResponse(bid!.Id, bid.AuctionId, bid.BidderName, bid.Amount, bid.PlacedAt);
 
-        // Here we're returning the response only to the client that placed the bid.
-        // Other participants in the same auction won't receive any notification
-        // this is the issue we'll discover and solve in Flow 2.
         return Ok(response);
     }
 }

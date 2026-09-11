@@ -23,7 +23,8 @@ public class AuctionsController(IAuctionService auctionService) : BaseController
             auction.StartingPrice,
             auction.CurrentPrice,
             auction.SellerName,
-            auction.CreatedAt
+            auction.CreatedAt,
+            LastBidAt: null
         );
 
         return CreatedAtAction(nameof(GetAuction), new { id = auction.Id }, response);
@@ -35,6 +36,8 @@ public class AuctionsController(IAuctionService auctionService) : BaseController
         var auction = await auctionService.GetAuctionAsync(id);
         if (auction is null) return NotFound();
 
+        var lastBidAt = auction.Bids.FirstOrDefault()?.PlacedAt;
+
         var response = new AuctionResponse(
             auction.Id, 
             auction.Title, 
@@ -42,7 +45,8 @@ public class AuctionsController(IAuctionService auctionService) : BaseController
             auction.StartingPrice, 
             auction.CurrentPrice, 
             auction.SellerName, 
-            auction.CreatedAt
+            auction.CreatedAt,
+            lastBidAt
         );
 
         return Ok(response);
