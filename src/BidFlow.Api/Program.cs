@@ -14,6 +14,8 @@ builder.Services.AddDbContext<BidFlowDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"));
 });
 
+builder.Services.AddSignalR();
+
 builder.Services.AddScoped<IAuctionService, AuctionService>();
 
 builder.Services.AddScoped<IAuctionNotifier, SignalRAuctionNotifier>();
@@ -26,9 +28,8 @@ if (app.Environment.IsDevelopment())
     
 }
 
-app.UseHttpsRedirection();
-
-app.UseAuthorization();
+app.UseDefaultFiles();
+app.UseStaticFiles();
 
 app.MapControllers();
 

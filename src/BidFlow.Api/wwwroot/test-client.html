@@ -1,0 +1,139 @@
+﻿<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="utf-8" />
+    <title>BidFlow - Test client</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            max-width: 640px;
+            margin: 40px auto;
+            padding: 0 16px;
+        }
+
+        #log {
+            border: 1px solid #ccc;
+            padding: 12px;
+            height: 260px;
+            overflow-y: auto;
+            background: #fafafa;
+        }
+
+        input, button {
+            padding: 8px;
+            font-size: 14px;
+        }
+
+        #status {
+            margin: 8px 0;
+            color: #555;
+        }
+
+        .hint {
+            color: #777;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <h2>BidFlow — Test client (Flow 2)</h2>
+    <p class="hint">
+        This page is temporary scaffolding just for following real-time updates. Creating auctions and
+        placing bids is still done via Swagger or curl. It will be removed once the Next.js frontend
+        is ready in the final phase.
+    </p>
+
+    <label>Auction ID: <input id="auctionId" placeholder="Paste the auction id here" style="width: 320px" /></label>
+    <button id="joinBtn">Join auction group</button>
+    <div id="status">Not connected yet</div>
+    <h3>Current price: <span id="currentPrice">—</span></h3>
+
+    <h3>Live updates</h3>
+    <div id="log"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+    <script>
+        const statusEl = document.getElementById("status");
+        const logEl = document.getElementById("log");
+        const priceEl = document.getElementById("currentPrice");
+
+        const log = (msg) => {
+            const line = document.createElement("div");
+            line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            logEl.prepend(line);
+        };
+
+        // The state we compare every new update against (whether it arrives live or from the snapshot)
+        let lastKnownAt = null;
+        let currentAuctionId = null;
+
+        // The single rule that resolves ordering, snapshot, and reconnect issues together:
+        // ignore any update older than the last thing we actually saw.
+        function applyUpdate(source, amount, placedAtIso) {
+            const placedAt = new Date(placedAtIso);
+            if (lastKnownAt !== null && placedAt <= lastKnownAt) {
+                log(`(${source}) Ignored stale update: $${amount} @ ${placedAtIso}`);
+                return;
+            }
+            lastKnownAt = placedAt;
+            priceEl.textContent = `$${amount}`;
+            log(`(${source}) Current price now: $${amount}`);
+        }
+
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl("/hubs/auction")
+            .withAutomaticReconnect()
+            .build();
+
+        connection.on("BidPlaced", (bid) => {
+            applyUpdate("live", bid.amount, bid.placedAt);
+        });
+
+        // Important: SignalR gives the client a new ConnectionId after reconnecting,
+        // which means the old group membership is gone. We need to rejoin and take a new
+        // snapshot to cover any bid that happened while we were disconnected.
+        connection.onreconnected(async () => {
+            statusEl.textContent = "Reconnected — resyncing...";
+            if (currentAuctionId) {
+                await joinAndSync(currentAuctionId);
+            }
+            statusEl.textContent = "Connected to hub";
+        });
+
+        connection.onreconnecting(() => {
+            statusEl.textContent = "Connection lost, trying to reconnect...";
+        });
+
+        async function joinAndSync(auctionId) {
+            // Order matters: join the group first so we're sure to receive any bid that
+            // happens from this point on live, then fetch the snapshot to cover anything
+            // we missed before joining.
+            await connection.invoke("JoinAuctionGroup", auctionId);
+            log(`Joined auction group ${auctionId}`);
+
+            const res = await fetch(`/api/auctions/${auctionId}`);
+            if (!res.ok) {
+                log("Could not fetch current auction state");
+                return;
+            }
+            const auction = await res.json();
+            // If there are no bids yet, use createdAt as a baseline so any new bid counts as "newer" than it
+            const baselineAt = auction.lastBidAt ?? auction.createdAt;
+            applyUpdate("snapshot", auction.currentPrice, baselineAt);
+        }
+
+        connection
+            .start()
+            .then(() => { statusEl.textContent = "Connected to hub"; })
+            .catch((err) => log("Connection error: " + err));
+
+        document.getElementById("joinBtn").addEventListener("click", async () => {
+            const id = document.getElementById("auctionId").value.trim();
+            if (!id) return;
+            currentAuctionId = id;
+            lastKnownAt = null;
+            await joinAndSync(id);
+        });
+    </script>
+</body>
+</html>

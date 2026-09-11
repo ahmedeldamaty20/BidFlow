@@ -9,5 +9,6 @@ public record AuctionResponse(
     decimal StartingPrice,
     decimal CurrentPrice,
     string SellerName,
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    DateTime? LastBidAt
 );
