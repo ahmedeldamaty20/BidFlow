@@ -4,7 +4,6 @@ using BidFlow.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
 namespace BidFlow.Api.Services;
-
 public class AuctionService(BidFlowDbContext db, IAuctionNotifier notifier) : IAuctionService
 {
     public async Task<Auction> CreateAuctionAsync(string title, string description, decimal startingPrice, string sellerName)
@@ -32,13 +31,24 @@ public class AuctionService(BidFlowDbContext db, IAuctionNotifier notifier) : IA
 
     public async Task<(bool Success, string? Error, Bid? Bid)> PlaceBidAsync(Guid auctionId, string bidderName, decimal amount)
     {
-        var auction = await db.Auctions.FirstOrDefaultAsync(a => a.Id == auctionId);
-        if (auction is null)
-            return (false, "Auction not found", null);
+        await using var transaction = await db.Database.BeginTransactionAsync();
 
-        // Validate bid amount
+        var auctions = await db.Auctions
+            .FromSqlInterpolated($@"SELECT * FROM ""Auctions"" WHERE ""Id"" = {auctionId} FOR UPDATE")
+            .ToListAsync();
+
+        var auction = auctions.FirstOrDefault();
+        if (auction is null)
+        {
+            await transaction.RollbackAsync();
+            return (false, "Auction not found", null);
+        }
+
         if (amount <= auction.CurrentPrice)
+        {
+            await transaction.RollbackAsync();
             return (false, $"Bid must be greater than current price ({auction.CurrentPrice})", null);
+        }
 
         var bid = new Bid
         {
@@ -51,6 +61,7 @@ public class AuctionService(BidFlowDbContext db, IAuctionNotifier notifier) : IA
 
         db.Bids.Add(bid);
         await db.SaveChangesAsync();
+        await transaction.CommitAsync();
 
         var notification = new BidPlacedNotification(bid.Id, bid.AuctionId, bid.BidderName, bid.Amount, bid.PlacedAt);
         await notifier.NotifyBidPlacedAsync(auctionId, notification);
